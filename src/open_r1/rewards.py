@@ -31,6 +31,8 @@ def accuracy_reward(completions, **kwargs):
     elif dataset == "gsm8k":
         rewards = gsm_accuracy_reward(completions, **kwargs)
 
+    return rewards
+
 def verify_ifeval_sample(content, constraint):
     if isinstance(constraint, str):
         constraint = json.loads(constraint)
