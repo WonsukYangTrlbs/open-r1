@@ -9,6 +9,7 @@ from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 
 from .utils import is_e2b_available
+from .utils.if_functions import IF_FUNCTIONS_MAP
 
 
 if is_e2b_available():
@@ -18,11 +19,91 @@ if is_e2b_available():
     load_dotenv()
 
 
-def accuracy_reward(completions, solution, **kwargs):
-    """Reward function that checks if the completion is the same as the ground truth."""
+def accuracy_reward(completions, **kwargs):
+    dataset = kwargs.get("dataset")
+    if dataset == "ifeval":
+        rewards = instruction_following_reward(completions, **kwargs)
+    elif dataset == "MATH":
+        rewards = math_accuracy_reward(completions, **kwargs)
+    elif dataset == "gsm8k":
+        rewa
+
+
+def verify_ifeval_sample(content, constraint):
+    if isinstance(constraint, str):
+        constraint = json.loads(constraint)
+    func_name = constraint.pop("func_name")
+    func = IF_FUNCTIONS_MAP[func_name]
+    non_none_args = {k: v for k, v in constraint.items() if v is not None}
+    if len(constraint) == 0:
+        return func(content)
+    return func(content, **non_none_args)
+
+
+def instruction_following_reward(completions, **kwargs):
+    constraints = kwargs.get("ground_truth")
     contents = [completion[0]["content"] for completion in completions]
     rewards = []
-    for content, sol in zip(contents, solution):
+    for content, constraint in zip(contents, constraints):
+        reward = verify_ifeval_sample(content, constraint)
+        rewards.append(reward)
+    return rewards
+
+
+def extract_response(content):
+    searched = re.search(r"So the answer is (.+)", content)
+    return searched.group(1).strip() if searched else ""
+
+
+def gsm_accuracy_reward(completions, **kwargs):
+    ground_truth = kwargs.get("ground_truth")
+    contents = [completion[0]["content"] for completion in completions]
+    rewards = []
+    for content, sol in zip(contents, ground_truth):
+        gold_parsed = parse(
+            sol,
+            extraction_mode="first_match",
+            extraction_config=[LatexExtractionConfig()],
+        )
+        if len(gold_parsed) != 0:
+            # We require the answer to be provided in correct latex (no malformed operators)
+            content = extract_response(content)
+            answer_parsed = parse(
+                content,
+                extraction_config=[
+                    LatexExtractionConfig(
+                        normalization_config=NormalizationConfig(
+                            nits=False,
+                            malformed_operators=False,
+                            basic_latex=True,
+                            equations=True,
+                            boxed="none",
+                            units=True,
+                        ),
+                        # Ensures that boxed is tried first
+                        boxed_match_priority=0,
+                        try_extract_without_anchor=False,
+                    )
+                ],
+                extraction_mode="first_match",
+            )
+            # Reward 1 if the content is the same as the ground truth, 0 otherwise
+            reward = float(verify(answer_parsed, gold_parsed))
+        else:
+            # If the gold solution is not parseable, we reward 1 to skip this example
+            reward = 1.0
+            print("Failed to parse gold solution: ", sol)
+        rewards.append(reward)
+
+    return rewards
+
+
+def math_accuracy_reward(completions, **kwargs):
+    """Reward function that checks if the completion is the same as the ground truth."""
+    ground_truth = kwargs.get("ground_truth")
+    contents = [completion[0]["content"] for completion in completions]
+    rewards = []
+    for content, sol in zip(contents, ground_truth):
         gold_parsed = parse(
             sol,
             extraction_mode="first_match",
@@ -62,9 +143,13 @@ def accuracy_reward(completions, solution, **kwargs):
 
 def format_reward(completions, **kwargs):
     """Reward function that checks if the reasoning process is enclosed within <think> and </think> tags, while the final answer is enclosed within <answer> and </answer> tags."""
+    dataset = kwargs.get("dataset")
+    reverse = (dataset == "ifeval")
     pattern = r"^<think>.*?</think>\s*<answer>.*?</answer>$"
     completion_contents = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, content, re.DOTALL | re.MULTILINE) for content in completion_contents]
+    if reverse:
+        return [0.0 if match else 1.0 for match in matches]
     return [1.0 if match else 0.0 for match in matches]
 
 
@@ -115,6 +200,29 @@ def len_reward(completions: list[Dict[str, str]], solutions: list[str], **kwargs
             print("Failed to parse gold solution: ", sol)
             continue
 
+        answer_parsed = parse(
+            content,
+            extraction_config=[
+                LatexExtractionConfig(
+                    normalization_config=NormalizationConfig(
+                        nits=False,
+                        malformed_operators=False,
+                        basic_latex=True,
+                        equations=True,
+                        boxed=True,
+                        units=True,
+                    ),
+                    boxed_match_priority=0,
+                    try_extract_without_anchor=False,
+                    anchor_config=AnchorConfig(
+                        text="So the answer is",
+                        after_text=True,  # Extract the number that comes after this phrase
+                        max_distance=10,  # Adjust based on expected distance from the phrase
+                    ),
+                )
+            ],
+            extraction_mode="first_match",
+        )
         answer_parsed = parse(
             content,
             extraction_config=[

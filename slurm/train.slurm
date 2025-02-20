@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --exclusive
 #SBATCH --gres=gpu:8
-#SBATCH --partition=hopper-prod  # Adjust this for your cluster
+#SBATCH --partition=h100-comp-1  # Adjust this for your cluster
 #SBATCH --output=./logs/%x-%j.out
 #SBATCH --err=./logs/%x-%j.err
 #SBATCH --requeue
