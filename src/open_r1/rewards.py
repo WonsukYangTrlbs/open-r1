@@ -10,6 +10,7 @@ from math_verify import LatexExtractionConfig, parse, verify
 
 from .utils import is_e2b_available
 from .utils.if_functions import IF_FUNCTIONS_MAP
+from .utils.ko_if_functions import KO_IF_FUNCTIONS_MAP
 
 
 if is_e2b_available():
@@ -23,11 +24,12 @@ def accuracy_reward(completions, **kwargs):
     dataset = kwargs.get("dataset")
     if dataset == "ifeval":
         rewards = instruction_following_reward(completions, **kwargs)
+    elif dataset == "koifeval":
+        rewards = ko_instruction_following_reward(completions, **kwargs)
     elif dataset == "MATH":
         rewards = math_accuracy_reward(completions, **kwargs)
     elif dataset == "gsm8k":
         rewards = gsm_accuracy_reward(completions, **kwargs)
-
 
 def verify_ifeval_sample(content, constraint):
     if isinstance(constraint, str):
@@ -45,6 +47,31 @@ def instruction_following_reward(completions, **kwargs):
     rewards = []
     for content, constraint in zip(contents, constraints):
         reward = verify_ifeval_sample(content, constraint)
+        rewards.append(reward)
+    return rewards
+
+def verify_koifeval_sample(content, constraint):
+    if isinstance(constraint, str):
+        constraint = json.loads(constraint)
+    func_names = constraint.pop("func_name")
+    func_constraints = constraint.pop("constraints")
+    verified = True
+    for func_name in func_names:
+        func = KO_IF_FUNCTIONS_MAP[func_name]
+        func_constraint = func_constraints[func_name]
+        non_none_args = {k: v for k, v in func_constraint.items() if v is not None}
+        if len(constraint) == 0:
+            verified = verified and func(content)
+        else:
+            verified = verified and func(content, **non_none_args)
+    return verified
+
+def ko_instruction_following_reward(completions, **kwargs):
+    constraints = kwargs.get("ground_truth")
+    contents = [completion[0]["content"] for completion in completions]
+    rewards = []
+    for content, constraint in zip(contents, constraints):
+        reward = verify_koifeval_sample(content, constraint)
         rewards.append(reward)
     return rewards
 
