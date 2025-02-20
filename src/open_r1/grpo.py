@@ -176,7 +176,29 @@ def main(script_args, training_args, model_args):
         prompt.append({"role": "user", "content": example["problem"]})
         return {"prompt": prompt}
 
-    dataset = dataset.map(make_conversation)
+    def create_problem(example):
+        messages = example.pop("messages")
+        problem = messages[0]["content"]
+
+        return {
+            "problem": problem,
+            "ground_truth": example.pop("ground_truth"),
+            "dataset": example.pop("dataset")
+        }
+
+    def box_ground_truth(example):
+        dataset = example.get("dataset")
+        if dataset in ("MATH", "gsm8k"):
+            return {**example, "ground_truth": r"\boxed{" + example["ground_truth"] + "}"}
+        else:
+            return example
+
+
+    for split in dataset:
+        if "problem" not in dataset[split].column_names:
+            dataset[split] = dataset[split].map(create_problem, num_proc=10).map(box_ground_truth, num_proc=10)
+
+    dataset = dataset.map(make_conversation).shuffle(seed=42).remove_columns(["constraint_type", "constraint"])
 
     for split in dataset:
         if "messages" in dataset[split].column_names:
