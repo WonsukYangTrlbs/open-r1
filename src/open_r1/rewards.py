@@ -26,7 +26,7 @@ def accuracy_reward(completions, **kwargs):
     elif dataset == "MATH":
         rewards = math_accuracy_reward(completions, **kwargs)
     elif dataset == "gsm8k":
-        rewa
+        rewards = gsm_accuracy_reward(completions, **kwargs)
 
 
 def verify_ifeval_sample(content, constraint):
@@ -39,7 +39,6 @@ def verify_ifeval_sample(content, constraint):
         return func(content)
     return func(content, **non_none_args)
 
-
 def instruction_following_reward(completions, **kwargs):
     constraints = kwargs.get("ground_truth")
     contents = [completion[0]["content"] for completion in completions]
@@ -49,44 +48,28 @@ def instruction_following_reward(completions, **kwargs):
         rewards.append(reward)
     return rewards
 
-
 def extract_response(content):
     searched = re.search(r"So the answer is (.+)", content)
     return searched.group(1).strip() if searched else ""
 
+def extract_gsm_response(text: str) -> str | None:
+    if "So the answer is" not in text:
+        return None
+    answer = text.split("So the answer is")[1].strip()
+    if answer.endswith("."):
+        answer = answer[:-1]
+    return answer
 
 def gsm_accuracy_reward(completions, **kwargs):
     ground_truth = kwargs.get("ground_truth")
     contents = [completion[0]["content"] for completion in completions]
     rewards = []
     for content, sol in zip(contents, ground_truth):
-        gold_parsed = parse(
-            sol,
-            extraction_mode="first_match",
-            extraction_config=[LatexExtractionConfig()],
-        )
+        gold_parsed = sol.strip()
         if len(gold_parsed) != 0:
             # We require the answer to be provided in correct latex (no malformed operators)
-            content = extract_response(content)
-            answer_parsed = parse(
-                content,
-                extraction_config=[
-                    LatexExtractionConfig(
-                        normalization_config=NormalizationConfig(
-                            nits=False,
-                            malformed_operators=False,
-                            basic_latex=True,
-                            equations=True,
-                            boxed="none",
-                            units=True,
-                        ),
-                        # Ensures that boxed is tried first
-                        boxed_match_priority=0,
-                        try_extract_without_anchor=False,
-                    )
-                ],
-                extraction_mode="first_match",
-            )
+            answer_parsed = extract_gsm_response(content)
+            
             # Reward 1 if the content is the same as the ground truth, 0 otherwise
             reward = float(verify(answer_parsed, gold_parsed))
         else:
@@ -94,7 +77,6 @@ def gsm_accuracy_reward(completions, **kwargs):
             reward = 1.0
             print("Failed to parse gold solution: ", sol)
         rewards.append(reward)
-
     return rewards
 
 
