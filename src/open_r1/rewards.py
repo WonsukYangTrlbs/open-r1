@@ -76,10 +76,29 @@ def accuracy_reward(completions, **kwargs):
                 # If the gold solution is not parseable, we reward 1 to skip this example
                 reward = 1.0
                 print("[GSM8k] Failed to parse gold solution: ", sol)
+
+        elif dataset == "kmmlu":
+            ground_truth = kwargs.get("ground_truth")
+            extracted_answer = extract_kmmlu_response(content)
+            reward = float(extracted_answer == ground_truth)
+
+        elif dataset == "mmlu":
+            ground_truth = kwargs.get("ground_truth")
+            extracted_answer = extract_mmlu_response(content)
+            reward = float(extracted_answer == ground_truth)
+
         rewards.append(reward)
     return rewards
 
 
+def extract_kmmlu_response(content):
+    answer = content.split("정답:")[-1].strip()
+    return answer
+
+def extract_mmlu_response(content):
+    answer = content.split("Answer:")[-1].strip()
+    return answer
+  
 def verify_koifeval_sample(content, constraint):
     if isinstance(constraint, str):
         constraint = json.loads(constraint)
@@ -95,7 +114,6 @@ def verify_koifeval_sample(content, constraint):
             non_none_args = {k: v for k, v in func_constraint.items() if v is not None}
             verified = verified and func(content, **non_none_args)
     return float(verified)
-
 
 def verify_ifeval_sample(content, constraint):
     if isinstance(constraint, str):
