@@ -10,6 +10,7 @@ from math_verify import LatexExtractionConfig, parse, verify, ExprExtractionConf
 
 from .utils import is_e2b_available
 from .utils.if_functions import IF_FUNCTIONS_MAP
+from .utils.ko_if_functions import KO_IF_FUNCTIONS_MAP
 
 
 if is_e2b_available():
@@ -28,6 +29,8 @@ def accuracy_reward(completions, **kwargs):
         if dataset == "ifeval":
             # sol is actually constraint
             reward = verify_ifeval_sample(content, sol)
+        elif dataset == "koifeval":
+            reward = verify_koifeval_sample(content, sol)
         elif dataset == "MATH":
             gold_parsed = parse(
                 sol,
@@ -75,6 +78,23 @@ def accuracy_reward(completions, **kwargs):
                 print("[GSM8k] Failed to parse gold solution: ", sol)
         rewards.append(reward)
     return rewards
+
+
+def verify_koifeval_sample(content, constraint):
+    if isinstance(constraint, str):
+        constraint = json.loads(constraint)
+    func_names = constraint.pop("func_name")
+    func_constraints = constraint.pop("constraints")
+    verified = True
+    for func_name in func_names:
+        func = KO_IF_FUNCTIONS_MAP[func_name]
+        func_constraint = func_constraints[func_name]
+        if func_constraint is None or len(func_constraint) == 0:
+            verified = verified and func(content)
+        else:
+            non_none_args = {k: v for k, v in func_constraint.items() if v is not None}
+            verified = verified and func(content, **non_none_args)
+    return float(verified)
 
 
 def verify_ifeval_sample(content, constraint):

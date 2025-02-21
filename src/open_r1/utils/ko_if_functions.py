@@ -12,11 +12,9 @@ It covers all 25 constraints from the IFEval taxonomy. To be used either for eva
 def verify_keywords(text, keyword_list):
     """
     Verify if the response contains all the specified keywords.
-
     Args:
         response (str): The response text to check
         keyword_list (list): A list of keywords to check for
-
     Returns:
         bool: True if all keywords are present in the response, False otherwise
     """
@@ -28,21 +26,19 @@ def verify_keywords(text, keyword_list):
 
 
 # Keyword Frequency: In your response, the word {word} should appear {N} times.
-def verify_keyword_frequency(text, word, N):
+def verify_keyword_frequency(text, keyword, N, quantifier=None):
     """
     Verifies if a keyword appears exactly N times in the given text.
-
     Args:
         text (str): The text to analyze
         keyword (str): The keyword to count
         expected_count (int): The expected number of occurrences
-
     Returns:
         tuple: (bool, int) - (Whether constraint is met, actual count found)
     """
     # Convert text to lowercase to make the search case-insensitive
     text = text.lower()
-    keyword = word.lower()
+    keyword = keyword.lower()
 
     # Split text into words and remove punctuation
     import re
@@ -51,26 +47,27 @@ def verify_keyword_frequency(text, word, N):
     # Count actual occurrences
     actual_count = sum(1 for word in words if word == keyword)
 
-    # Check if constraint is met
-    constraint_met = actual_count == N
-
-    return constraint_met
+    result = None
+    if quantifier == "보다 많이":
+        result = (actual_count > N)
+    elif quantifier == "보다 적게":
+        result = (actual_count < N)
+    else:  # quantifier == "만큼만"
+        result = (actual_count == N)
+    return result
 
 
 # Forbidden Words: Do not include keywords {forbidden words} in the response.
 def validate_forbidden_words(text, forbidden_words):
     """
     Validates that the text does not contain any of the specified forbidden words.
-
     Args:
         text (str): The text to check for forbidden words
         forbidden_words (list[str]): A list of forbidden words
-
     Returns:
         tuple[bool, list[str]]: A tuple containing:
             - Boolean indicating if any forbidden words are present
             - List of forbidden words found in the text
-
     Example:
         text = "This is a message that should not contain any bad words"
         forbidden_words = ["bad", "evil", "harmful"]
@@ -88,18 +85,15 @@ def validate_forbidden_words(text, forbidden_words):
 
 # Letter Frequency : In your response, the letter {letter} should appear {N} times.
 
-def verify_letter_frequency(text: str, letter: str, N: int) -> bool:
+def verify_letter_frequency(text: str, letter: str, N: int, quantifier: str = None) -> bool:
     """
     Verifies if a given letter appears exactly the specified number of times in the text.
-
     Args:
         text (str): The text to check
         letter (str): The letter to count (case-sensitive)
         target_count (int): The expected number of occurrences
-
     Returns:
         bool: True if the constraint is met, False otherwise
-
     Example:
         >>> verify_letter_frequency("hello world", "l", 3)
         True
@@ -111,8 +105,15 @@ def verify_letter_frequency(text: str, letter: str, N: int) -> bool:
     if len(letter) != 1:
         raise ValueError("Letter parameter must be a single character")
 
+    result = None
     actual_count = text.count(letter)
-    return actual_count == N
+    if quantifier == "보다 많이":
+        result = (actual_count > N)
+    elif quantifier == "보다 적게":
+        result = (actual_count < N)
+    else:  # quantifier == "만큼만"
+        result = (actual_count == N)
+    return result
 
 
 # Response Language: Your ENTIRE response should be in {language}, no other language is allowed.
@@ -120,14 +121,11 @@ def verify_letter_frequency(text: str, letter: str, N: int) -> bool:
 def validate_response_language(text, language):
     """
     Validates that the entire response is in the specified language.
-
     Args:
         text (str): The text to check
         language (str): The language code (e.g., 'en' for English)
-
     Returns:
         bool: True if the response is entirely in the specified language, False otherwise
-
     Example:
         text = "This is an English sentence"
         language = "en"
@@ -147,15 +145,12 @@ def verify_paragraph_count(text: str, N: int) -> bool:
     """
     Verifies that a text contains the expected number of paragraphs,
     where paragraphs are separated by markdown dividers '* * *'
-
     Args:
         text (str): The text to analyze
         expected_count (int): Expected number of paragraphs
-
     Returns:
         bool: True if the text contains exactly the expected number of paragraphs,
               False otherwise
-
     Example:
          text = "First paragraph\n* * *\nSecond paragraph"
          verify_paragraph_count(text, 2)
@@ -183,18 +178,15 @@ def verify_paragraph_count(text: str, N: int) -> bool:
 
 # Number Words: Answer with at least / around / at most {N} words
 
-def validate_word_constraint(text: str, N: int, quantifier: str) -> bool:
+def validate_word_constraint(text: str, N: int, quantifier: str = None) -> bool:
     """
     Validates if a text meets specified word count constraints.
-
     Args:
         text (str): The text to check
         count (int): The target word count
         qualifier (str): The type of constraint ('at least', 'around', 'at most')
-
     Returns:
         bool: True if the constraint is met, False otherwise
-
     Raises:
         ValueError: If an invalid qualifier is provided
     """
@@ -205,26 +197,22 @@ def validate_word_constraint(text: str, N: int, quantifier: str) -> bool:
     # Define tolerance for "around" qualifier (±10% of target count)
     tolerance = max(round(N * 0.1), 1)
 
-    if quantifier == "at least":
-        return actual_count >= N
-    elif quantifier == "at most":
-        return actual_count <= N
-    elif quantifier == "around":
-        return abs(actual_count - N) <= tolerance
+    if quantifier == "보다 많은":
+        return actual_count > N
+    elif quantifier == "보다 적은":
+        return actual_count < N
     else:
         return False
 
 
 # Number Sentences: Answer with at least / around / at most {N} sentences.
-def verify_sentence_constraint(text: str, N: int, quantifier: str) -> bool:
+def verify_sentence_constraint(text: str, N: int, quantifier: str = None) -> bool:
     """
     Verifies if a text contains the expected number of sentences.
-
     Args:
         text (str): The text to analyze
         N (int): The expected number of sentences
         quantifier (str): The quantifier ('at least', 'around', 'at most')
-
     Returns:
         bool: True if the text contains the expected number of sentences, False otherwise
     """
@@ -235,12 +223,10 @@ def verify_sentence_constraint(text: str, N: int, quantifier: str) -> bool:
     actual_count = len(sentences)
 
     # Check if the actual count matches the expected count based on the quantifier
-    if quantifier == 'at least':
-        return actual_count >= N
-    elif quantifier == 'around':
-        return abs(actual_count - N) <= 1
-    elif quantifier == 'at most':
-        return actual_count <= N
+    if quantifier == '보다 많은':
+        return actual_count > N
+    elif quantifier == '보다 적은':
+        return actual_count < N
     else:
         return False
 
@@ -251,13 +237,11 @@ def validate_paragraphs(text, N, first_word, i):
     """
     Validates that a text contains the expected number of paragraphs and that the i-th paragraph starts with a specific
     word.
-
     Args:
         text (str): The text to analyze
         N (int): The expected number of paragraphs
         first_word (str): The expected first word of the i-th paragraph
         i (int): The index of the paragraph to check (1-indexed)
-
     Returns:
         bool: True if the text meets the paragraph and first word requirements, False otherwise
     """
@@ -268,8 +252,8 @@ def validate_paragraphs(text, N, first_word, i):
     if len(paragraphs) != N:
         return False
 
-    i = int(i)
     # Check if the i-th paragraph starts with the specified first word
+    i = int(i)
     if paragraphs[i - 1].strip().startswith(first_word):
         return True
     return False
@@ -280,10 +264,8 @@ def validate_paragraphs(text, N, first_word, i):
 def verify_postscript(text, postscript_marker):
     """
     Verifies if a text contains a postscript starting with '{postscript marker}'
-
     Args:
         text (str): The text to verify
-
     Returns:
         bool: True if the text contains a valid postscript, False otherwise
     """
@@ -303,16 +285,13 @@ def verify_postscript(text, postscript_marker):
 def validate_placeholders(text: str, N: int) -> tuple[bool, List[str]]:
     """
     Validates if a text contains at least the specified number of placeholders in square brackets.
-
     Args:
         text (str): The text to check for placeholders
         min_placeholders (int): Minimum number of placeholders required
-
     Returns:
         tuple[bool, List[str]]: A tuple containing:
             - Boolean indicating if the text meets the placeholder requirement
             - List of found placeholders
-
     Example:
         >>> text = "Hello [name], your [item] will be delivered to [address]"
         >>> validate_placeholders(text, 2)
@@ -330,15 +309,13 @@ def validate_placeholders(text: str, N: int) -> tuple[bool, List[str]]:
 
 # Number Bullets: Your answer must contain exactly {N} bullet points. Use the markdown bullet points such as: * This
 # is a point.
-def verify_bullet_points(text: str, N: int) -> tuple[bool, str]:
+def verify_bullet_points(text: str, N: int, quantifier=None) -> tuple[bool, str]:
     """
     Verifies if a text contains exactly N bullet points in markdown format.
     Returns a tuple of (is_valid, message).
-
     Args:
         text (str): The text to check
         expected_count (int): The expected number of bullet points
-
     Returns:
         tuple[bool, str]: (True if constraint is met, explanation message)
     """
@@ -347,10 +324,14 @@ def verify_bullet_points(text: str, N: int) -> tuple[bool, str]:
     bullet_points = [line.strip() for line in lines if line.strip().startswith(('*', '-'))]
     actual_count = len(bullet_points)
 
-    if actual_count == N:
-        return True
-    else:
-        return False
+    result = None
+    if quantifier == "보다 많은":
+        result = (actual_count > N)
+    elif quantifier == "보다 적은":
+        result = (actual_count < N)
+    else:  # quantifier == "만큼만"
+        result = (actual_count == N)
+    return result
 
 
 # Title: Your answer must contain a title, wrapped in double angular brackets, such as <<poem of joy>>.
@@ -448,7 +429,7 @@ def validate_lowercase(text: str) -> bool:
 
 # Frequency of All-capital Words: In your response, words with all capital letters should appear at least / around /
 # at most {N} times.
-def validate_frequency_capital_words(text: str, N: int, quantifier: str) -> bool:
+def validate_frequency_capital_words(text: str, N: int, quantifier: str = None) -> bool:
     words = re.findall(r'\b[A-Z]+\b', text)
     if quantifier == 'at least':
         return len(words) >= N
@@ -485,7 +466,7 @@ def validate_no_commas(text: str) -> bool:
         return False
 
 
-IF_FUNCTIONS_MAP = {
+KO_IF_FUNCTIONS_MAP = {
     'verify_keywords': verify_keywords,
     'verify_keyword_frequency': verify_keyword_frequency,
     'validate_forbidden_words': validate_forbidden_words,
@@ -507,7 +488,7 @@ IF_FUNCTIONS_MAP = {
     'validate_two_responses': validate_two_responses,
     'validate_uppercase': validate_uppercase,
     'validate_lowercase': validate_lowercase,
-    'validate_frequency_capital_words': validate_frequency_capital_words,
+    # 'validate_frequency_capital_words': validate_frequency_capital_words,
     'validate_end': validate_end,
     'validate_quotation': validate_quotation,
     'validate_no_commas': validate_no_commas

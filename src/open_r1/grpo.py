@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 import datasets
 import torch
 import transformers
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk, concatenate_datasets, DatasetDict
 from transformers import set_seed
 from transformers.trainer_utils import get_last_checkpoint
 
@@ -138,34 +138,10 @@ def main(script_args, training_args, model_args):
         init_wandb_training(training_args)
 
     # Load the dataset
-    dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
-
-    ################
-    # Load tokenizer
-    ################
-    tokenizer = get_tokenizer(model_args, training_args)
-
-    # Get reward functions
-    REWARD_FUNCS_REGISTRY = {
-        "accuracy": accuracy_reward,
-        "format": format_reward,
-        "reasoning_steps": reasoning_steps_reward,
-        "cosine": get_cosine_scaled_reward(
-            min_value_wrong=script_args.cosine_min_value_wrong,
-            max_value_wrong=script_args.cosine_max_value_wrong,
-            min_value_correct=script_args.cosine_min_value_correct,
-            max_value_correct=script_args.cosine_max_value_correct,
-            max_len=script_args.cosine_max_len,
-        ),
-        "repetition_penalty": get_repetition_penalty_reward(
-            ngram_size=script_args.repetition_n_grams,
-            max_penalty=script_args.repetition_max_penalty,
-        ),
-        "length": len_reward,
-        "code": code_reward,
-    }
-    reward_funcs = [REWARD_FUNCS_REGISTRY[func] for func in script_args.reward_funcs]
-
+    # dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
+    # for dataset_name in script_args.dataset_name:
+    #     dataset = load_from_disk(dataset_name)
+        
     # Format into conversation
     def make_conversation(example):
         prompt = []
@@ -193,16 +169,47 @@ def main(script_args, training_args, model_args):
         else:
             return example
 
+    train_dataset_list = []
+    for dataset_name in script_args.dataset_name:
+        dataset = load_from_disk(dataset_name)
+        for split in dataset:
+            if "problem" not in dataset[split].column_names:
+                dataset[split] = dataset[split].map(create_problem, num_proc=10).map(box_ground_truth, num_proc=10)
 
-    for split in dataset:
-        if "problem" not in dataset[split].column_names:
-            dataset[split] = dataset[split].map(create_problem, num_proc=10).map(box_ground_truth, num_proc=10)
+        dataset = dataset.map(make_conversation).remove_columns(["constraint_type", "constraint"])
 
-    dataset = dataset.map(make_conversation).shuffle(seed=42).remove_columns(["constraint_type", "constraint"])
+        for split in dataset:
+            if "messages" in dataset[split].column_names:
+                dataset[split] = dataset[split].remove_columns("messages")
+        train_dataset_list.append(dataset["train"])
+    ds = concatenate_datasets(train_dataset_list).shuffle(seed=42)
+    dataset = DatasetDict(train=ds)
 
-    for split in dataset:
-        if "messages" in dataset[split].column_names:
-            dataset[split] = dataset[split].remove_columns("messages")
+    ################
+    # Load tokenizer
+    ################
+    tokenizer = get_tokenizer(model_args, training_args)
+
+    # Get reward functions
+    REWARD_FUNCS_REGISTRY = {
+        "accuracy": accuracy_reward,
+        "format": format_reward,
+        "reasoning_steps": reasoning_steps_reward,
+        "cosine": get_cosine_scaled_reward(
+            min_value_wrong=script_args.cosine_min_value_wrong,
+            max_value_wrong=script_args.cosine_max_value_wrong,
+            min_value_correct=script_args.cosine_min_value_correct,
+            max_value_correct=script_args.cosine_max_value_correct,
+            max_len=script_args.cosine_max_len,
+        ),
+        "repetition_penalty": get_repetition_penalty_reward(
+            ngram_size=script_args.repetition_n_grams,
+            max_penalty=script_args.repetition_max_penalty,
+        ),
+        "length": len_reward,
+        "code": code_reward,
+    }
+    reward_funcs = [REWARD_FUNCS_REGISTRY[func] for func in script_args.reward_funcs]
 
     logger.info("*** Initializing model kwargs ***")
     torch_dtype = (
