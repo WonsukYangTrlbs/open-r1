@@ -110,7 +110,7 @@ def check_failed_with_code_issue(text):
 
 
 def verify_mbpp_sample(content, ground_truth, mode: Literal["strict", "loose"] = "strict"):
-    content = parse_python_code(content)
+    content = extract_code(content)
     test_cases = json.loads(ground_truth)
     test_results = CODE_EVAL.compute(references=[test_cases], predictions=[[content] for _ in test_cases], k=[1])
     if mode == "strict":
