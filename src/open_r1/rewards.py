@@ -122,6 +122,11 @@ def verify_mbpp_sample(content, ground_truth, mode: Literal["strict", "loose"] =
         score = sum(did_code_ran) / len(did_code_ran)
     return score
 
+THINK_PATTERN = r"<think>\n.*?\n</think>"
+
+def remove_think(content):
+    cleaned_content = re.sub(THINK_PATTERN, "", content, flags=re.DOTALL).strip()
+    return cleaned_content
 
 # NOTE: expected "The answer is (A)." => A
 def extract_mmlu_response(content):
