@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=open-r1-sft
+#SBATCH --job-name=evals
 #SBATCH --ntasks-per-node=1
 #SBATCH --exclusive
 #SBATCH --gres=gpu:8
-#SBATCH --partition=h100-comp-1  # Adjust this for your cluster
+#SBATCH --partition=h100-comp-1 # Adjust this for your cluster
 #SBATCH --output=./logs/%x-%j.out
 #SBATCH --err=./logs/%x-%j.err
 #SBATCH --requeue
@@ -73,6 +73,7 @@ export LAUNCHER="HF_HUB_ENABLE_HF_TRANSFER=1 ACCELERATE_LOG_LEVEL=info TRANSFORM
     --tee 3 \
     "
 
+export WANDB_PROJECT=grpo
 # force crashing on nccl issues like hanging broadcast
 export NCCL_ASYNC_ERROR_HANDLING=1
 # export NCCL_DEBUG=INFO

@@ -162,21 +162,21 @@ def main(script_args, training_args, model_args):
             "dataset": example.pop("dataset")
         }
 
-    def box_ground_truth(example):
-        dataset = example.get("dataset")
-        if dataset in ("MATH", "gsm8k"):
-            return {**example, "ground_truth": r"\boxed{" + example["ground_truth"] + "}"}
-        else:
-            return example
+    # def box_ground_truth(example):
+    #     dataset = example.get("dataset")
+    #     if dataset in ("MATH", "gsm8k"):
+    #         return {**example, "ground_truth": r"\boxed{" + example["ground_truth"] + "}"}
+    #     else:
+    #         return example
 
     train_dataset_list = []
     for dataset_name in script_args.dataset_name:
         dataset = load_from_disk(dataset_name)
         for split in dataset:
             if "problem" not in dataset[split].column_names:
-                dataset[split] = dataset[split].map(create_problem, num_proc=10).map(box_ground_truth, num_proc=10)
+                dataset[split] = dataset[split].map(create_problem, num_proc=10)
 
-        dataset = dataset.map(make_conversation).remove_columns(["constraint_type", "constraint"])
+        dataset = dataset.map(make_conversation)
 
         for split in dataset:
             if "messages" in dataset[split].column_names:
