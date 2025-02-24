@@ -29,6 +29,7 @@ def accuracy_reward(completions, **kwargs):
     contents = [completion[0]["content"] for completion in completions]
     rewards = []
     for content, sol, dataset in zip(contents, ground_truth, dataset):
+        content = remove_think(content)
         if dataset == "ifeval":
             # sol is actually constraint
             reward = verify_ifeval_sample(content, sol)
@@ -94,11 +95,8 @@ def accuracy_reward(completions, **kwargs):
         elif dataset == "mbpp":
             reward = verify_mbpp_sample(content, sol)
         elif dataset == "kmmlu":
-            extracted_answer = extract_kmmlu_response(content)
-            reward = float(extracted_answer == sol)
-        elif dataset == "mmlu":
             extracted_answer = extract_mmlu_response(content)
-            reward = float(extracted_answer == sol)
+            reward = float(verify((extracted_answer == sol)))
         rewards.append(reward)
     return rewards
 
@@ -130,17 +128,50 @@ def remove_think(content):
 
 # NOTE: expected "The answer is (A)." => A
 def extract_mmlu_response(content):
-    answer = content.split()[-1].strip("().")
-    return answer
+    answer_parsed = parse(
+                    content,
+                    extraction_config=[
+                        LatexExtractionConfig(
+                            normalization_config=NormalizationConfig(
+                                nits=False,
+                                malformed_operators=False,
+                                basic_latex=True,
+                                equations=True,
+                                boxed="all",
+                                units=True,
+                            ),
+                            # Ensures that boxed is tried first
+                            boxed_match_priority=0,
+                            try_extract_without_anchor=False,
+                        )
+                    ],
+                    extraction_mode="first_match",
+                )
+    return answer_parsed
 
 
 # NOTE: expected "정답은 A입니다." => A
 def extract_kmmlu_response(content):
-    try:
-        answer = content.split()[1][0]
-    except IndexError:
-        answer = ""
-    return answer
+    answer_parsed = parse(
+                    content,
+                    extraction_config=[
+                        LatexExtractionConfig(
+                            normalization_config=NormalizationConfig(
+                                nits=False,
+                                malformed_operators=False,
+                                basic_latex=True,
+                                equations=True,
+                                boxed="all",
+                                units=True,
+                            ),
+                            # Ensures that boxed is tried first
+                            boxed_match_priority=0,
+                            try_extract_without_anchor=False,
+                        )
+                    ],
+                    extraction_mode="first_match",
+                )
+    return answer_parsed
 
 
 def verify_koifeval_sample(content, constraint):
